@@ -1,3 +1,4 @@
+import subprocess
 import os
 from openai import OpenAI
 import base64
@@ -5,6 +6,7 @@ import time
 import errno
 import pandas as pd
 from selenium import webdriver
+from selenium.webdriver.common.keys import Keys
 
 client = OpenAI()
 
@@ -40,13 +42,13 @@ def analyze_image(base64_image, script):
             {
                 "role": "system",
                 "content": """
-                You are a world-renowned website critiquer and are giving professional feedback to the designer.  State only facts, no fluff.  Be as specific as possible.
+                You are a world-renowned website critiquer and are giving professional feedback to the designer.  State only facts, no fluff.  One sentence is enough.
                 """,
             },
         ]
         + script
         + generate_new_line(base64_image),
-        max_tokens=500,
+        max_tokens=100,
     )
     response_text = response.choices[0].message.content
     return response_text
@@ -54,51 +56,52 @@ def analyze_image(base64_image, script):
 def main():
     script = []
 
-    while True:
+    # Read the CSV file
+    df = pd.read_csv(os.path.join(os.getcwd(), "./frames/file.csv"))
 
-        # Read the CSV file
-        df = pd.read_csv(os.path.join(os.getcwd(), "./frames/file.csv"))
+    # Loop through each row in the DataFrame
+    for index, row in df.iterrows():
+        # Create a new instance of the Firefox driver
+        driver = webdriver.Firefox()
 
-        # Loop through each row in the DataFrame
-        for index, row in df.iterrows():
-            # Create a new instance of the Firefox driver
-            driver = webdriver.Firefox()
+        url = row['url']  # replace 'url' with your column name
 
-            url = row['url']  # replace 'url' with your column name
+        try:
+            driver.get(url)
 
-            try:
-                driver.get(url)
+            subprocess.run(['node', 'screenshot.js', url])
 
-                driver.save_screenshot(f'frames/site.png')
+            # driver.save_screenshot(f'frames/site.png')
 
-                # path to your image
-                image_path = os.path.join(os.getcwd(), './frames/site.png')
-                # print(os.path.join(os.getcwd(), "./frames/frame.jpg"))
+            # path to your image
+            image_path = os.path.join(os.getcwd(), './frames/site.png')
+            # print(os.path.join(os.getcwd(), "./frames/frame.jpg"))
 
-                # getting the base64 encoding
-                base64_image = encode_image(image_path)
+            # getting the base64 encoding
+            base64_image = encode_image(image_path)
 
-                # analyze posture
-                print("👀 Analyzing Website...")
-                analysis = analyze_image(base64_image, script=script)
+            # analyze posture
+            print("👀 Analyzing Website...")
+            analysis = analyze_image(base64_image, script=script)
 
-                print("👀 My design feedback on: " + url)
-                print(analysis)
-                df.at[index, 'critique'] = analysis
+            print("👀 My design feedback on: " + url)
+            print(analysis)
+            df.at[index, 'critique'] = analysis
 
 
-                # Write DataFrame back to CSV file
-                df.to_csv(os.path.join(os.getcwd(), "./frames/file.csv"), index=False)
+            # Write DataFrame back to CSV file
+            df.to_csv(os.path.join(os.getcwd(), "./frames/file.csv"), index=False)
 
-                # wait for 5 seconds
-                time.sleep(1)
+            # wait for 5 seconds
+            time.sleep(1)
 
-                # Close the browser
-                driver.quit()
+            # Close the browser
+            driver.quit()
 
-            except Exception:
-                print(f"An error occurred with URL: {url}. Skipping...")
-                continue
+        except Exception:
+            print(f"An error occurred with URL: {url}. Skipping...")
+            continue
+    print("All websites have been analyzed.")
 
 if __name__ == "__main__":
     main()
